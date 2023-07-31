@@ -27,9 +27,9 @@ DEPENDENCIES="
 
 pushd "${TOOLCHAINS}"
 
-if ! [ -d "${PYTHON_APPLE_SUPPORT}" ]; then
-  git clone -b "${PYTHON_VERSION}" https://github.com/beeware/Python-Apple-support.git
-fi
+#if ! [ -d "${PYTHON_APPLE_SUPPORT}" ]; then
+#  git clone https://github.com/ModelFarmAI/Python-Apple-support.git
+#fi
 
 pushd "${PYTHON_APPLE_SUPPORT}"
 make
@@ -38,7 +38,13 @@ make OpenSSL-wheels
 make BZip2-wheels
 make XZ-wheels
 popd
+if ! [ -d "3.11" ]; then
+    ln -s  "${PYTHON_APPLE_SUPPORT}/support/iOS" 3.11
+fi
 popd
+
+echo ${DIST_DIR}
+
 
 rm -rf "${DIST_DIR}/bzip2" "${DIST_DIR}/libffi" "${DIST_DIR}/openssl" "${DIST_DIR}/xz" "${LOGS}/deps"
 mkdir -p "${DIST_DIR}" "${LOGS}/deps"

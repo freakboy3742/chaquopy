@@ -113,7 +113,7 @@ class Package:
         self.recipe_dir = self.find_package(package_name_or_recipe)
         self.meta = self.load_meta(self.recipe_dir, override_version=package_version, override_build=build_number)
         self.name = self.meta["package"]["name"]
-        self.version = self.meta["package"]["version"]
+        self.version = str(self.meta["package"]["version"])
 
         self.version_dir = f"{self.recipe_dir}/build/{self.version}"
 
@@ -398,11 +398,14 @@ class BaseWheelBuilder:
                 run(f"patch -p1 -i {patches_dir}/{patch_filename}")
 
     def build_wheel(self):
+        print("Inside build wheel")
         cd(self.src_dir)
         build_script = f"{self.package.recipe_dir}/build.sh"
+        print(build_script)
         if exists(build_script):
             return self.build_with_script(build_script)
         elif self.package.needs_python:
+            print("Building with pip")
             return self.build_with_pip()
         else:
             raise CommandError("Don't know how to build: no build.sh exists, and this is not "
@@ -504,14 +507,14 @@ class BaseWheelBuilder:
             "CPU_COUNT": str(multiprocessing.cpu_count()),
             "PKG_BUILDNUM": str(self.package.meta["build"]["number"]),
             "PKG_NAME": self.package.name,
-            "PKG_VERSION": self.package.version,
+            "PKG_VERSION": str(self.package.version),
             "RECIPE_DIR": self.package.recipe_dir,
             "SRC_DIR": self.src_dir,
         })
 
         for var in self.package.meta["build"]["script_env"]:
             key, value = var.split("=")
-            env[key] = value
+            env[key] = str(value)
 
         if self.verbose:
             # Format variables so they can be pasted into a shell when troubleshooting.
@@ -525,6 +528,7 @@ class BaseWheelBuilder:
             key: os.environ.get(key)
             for key in env
         }
+        print(env)
         os.environ.update(env)
 
         if self.package.needs_cmake:
@@ -729,7 +733,8 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             if suffix != "gfortran":  # Only required for SciPy and OpenBLAS.
                 assert_exists(filename)
             env[var.upper()] = filename
-        env["LDSHARED"] = f"{env['CC']} -shared"
+        env["LDSHARED"] = f"{env['CC']} -dynamiclib -undefined dynamic_lookup"
+        env["SHLIB_SUFFIX"] = ".dylib"
 
         # If any flags are changed, consider also updating target/build-common-tools.sh.
         gcc_flags = " ".join([
@@ -963,7 +968,8 @@ class AppleWheelBuilder(BaseWheelBuilder):
 
     @classmethod
     def api_level(cls, os, toolchain, python_version):
-        with open(f"{toolchain}/{python_version}//VERSIONS") as f:
+        #with open(f"{toolchain}/{python_version}//VERSIONS") as f:
+        with open(f"{toolchain}/Python-Apple-support/support/iOS/VERSIONS") as f:
             for line in f.read().splitlines():
                 if line.startswith(f"Min {os} version: "):
                     return line.split(':')[1].strip()
@@ -1088,7 +1094,7 @@ def normalize_name_wheel(name):
 
 #  e.g. "2017.01.02" -> "2017.1.2"
 def normalize_version(version):
-    return str(pkg_resources.parse_version(version))
+    return str(pkg_resources.parse_version(str(version)))
 
 
 def run(command, check=True):
