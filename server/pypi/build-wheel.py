@@ -10,6 +10,7 @@ from glob import glob
 import jsonschema
 import multiprocessing
 import os
+from os import getenv
 from os.path import abspath, basename, dirname, exists, isdir, join
 import pkg_resources
 import re
@@ -271,8 +272,11 @@ class BaseWheelBuilder:
             else:
                 self.extract_requirements()
             self.update_env()
+            shlib_suffix = getenv("SHLIB_SUFFIX")
+            print("shlib_suffix", shlib_suffix)
+         
             wheel_filename = self.fix_wheel(self.build_wheel())
-            self.reset_env()
+            #self.reset_env()
             return wheel_filename
 
     def find_python(self):
@@ -531,8 +535,10 @@ class BaseWheelBuilder:
             key: os.environ.get(key)
             for key in env
         }
-        print(env)
+        print("updating the env with", env)
         os.environ.update(env)
+
+       
 
         if self.package.needs_cmake:
             self.generate_cmake_toolchain()
@@ -736,9 +742,9 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             if suffix != "gfortran":  # Only required for SciPy and OpenBLAS.
                 assert_exists(filename)
             env[var.upper()] = filename
-        env["LDSHARED"] = f"{env['CC']} -dynamiclib -undefined dynamic_lookup"
-        env["SHLIB_SUFFIX"] = ".dylib"
-        print(env)
+        #env["LDSHARED"] = f"{env['CC']} -dynamiclib -undefined dynamic_lookup"
+        #env["SHLIB_SUFFIX"] = ".dylib"
+        #print("env after SHLIB", env)
 
         # If any flags are changed, consider also updating target/build-common-tools.sh.
         gcc_flags = " ".join([
@@ -803,7 +809,8 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             env["LDFLAGS"] = f" -lpython{self.python}"
 
     def process_native_binaries(self, tmp_dir, info_dir):
-        shlib_suffix = os.getenv("SHLIB_SUFFIX")
+        print("Inside process_native_binaries")
+        shlib_suffix = getenv("SHLIB_SUFFIX")
         if not shlib_suffix:
             shlib_suffix = ".so"
         print("shlib_suffix", shlib_suffix)
@@ -931,6 +938,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
             "CONFIGURE_LDFLAGS",
             "LDFLAGS",
             "LDSHARED",
+            "SHLIB_SUFFIX",
         ]:
             orig_parts = split_quoted(config_locals["build_time_vars"][var])
             clean_parts = []
@@ -1000,7 +1008,8 @@ class AppleWheelBuilder(BaseWheelBuilder):
 
         merge_dir = f"{package.version_dir}/{compat_tag}"
         print("merge_dir", merge_dir)
-        binary_stubs = set([])
+        framework_commands = {}
+        #binary_stubs = set([])
         for sdk_index, (sdk, architectures) in enumerate(wheels.items()):
             print("sdk", sdk)
             print("sdk_index", sdk_index)
@@ -1018,7 +1027,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
             # that we iterated over)
             # Generate a fat binary in the "fix wheel" location for each
             # architecture in the sdk.
-            shlib_suffix = os.getenv("SHLIB_SUFFIX")
+            shlib_suffix = getenv("SHLIB_SUFFIX")
             if not shlib_suffix:
                 shlib_suffix = ".so"
             print("shlib_suffix", shlib_suffix)
@@ -1031,7 +1040,11 @@ class AppleWheelBuilder(BaseWheelBuilder):
                 if bool(re.search(SO_PATTERN, path)):
                     fat_binary = f"{merge_dir}/{path}"
                     binary_stub = re.sub(fr"-{sdk}{SO_PATTERN}", "", path)
-                    binary_stubs += set([binary_stub])
+                    if binary_stub not in framework_commands:
+                        framework_commands[binary_stub] = f"xcodebuild -create-xcframework -output {merge_dir}/{binary_stub}.xcframework"
+                    framework_commands[binary_stub] += f" -library {merge_dir}/{path}"
+                   
+                    #binary_stubs += set([binary_stub])
                     print("fat_binary", fat_binary)
                     source_binaries = " ".join([
                         f"{package.version_dir}/{compat_tag}_{sdk}_{arch}/fix_wheel/{path}"
@@ -1040,10 +1053,11 @@ class AppleWheelBuilder(BaseWheelBuilder):
                     print("source_binaries", source_binaries)
                     run(f"lipo -create -o {fat_binary} {source_binaries}")
                     print(f"lipo -create -o {fat_binary} {source_binaries}")
-        for binary_stub in binary_stubs:
-            framework_command = "xcodebuild -create-xcframework -output {merge_dir}/{binary_stub}.xcframework"
-            for sdk, architectures in wheels.items():
-                framework_command += f"-library {merge_dir}{binary_stub}-{sdk}{SO_PATTERN}"
+        #for binary_stub in binary_stubs:
+        #    framework_command = "xcodebuild -create-xcframework -output {merge_dir}/{binary_stub}.xcframework"
+        #    for sdk, architectures in wheels.items():
+        #        framework_command += f"-library {merge_dir}{binary_stub}-{sdk}{SO_PATTERN}"
+        for build_stub, framework_command in framework_commands.items():
             run(framework_command)
 
             
@@ -1282,6 +1296,9 @@ def main():
                 if wheel:
                     wheels[sdk][architcture] = wheel
 
+        shlib_suffix = getenv("SHLIB_SUFFIX")
+        print("shlib_suffix from main", shlib_suffix)
+
         # Merge the wheels into a single OS wheel.
         AppleWheelBuilder.merge_wheels(
             package,
@@ -1290,6 +1307,7 @@ def main():
             OS=os,
             api_level=api_level,
         )
+        builder.reset_env()
 
 
 if __name__ == "__main__":

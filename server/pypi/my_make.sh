@@ -48,14 +48,17 @@ set -e
 #    yarl \
 #    zstandard \
 #    "
+#PACKAGES="
+#    cffi \
+#    aiohttp \
+#    frozenlist \
+#    multidict \
+#    pillow \
+#    pycrypto \
+#    yarl \
+#    "
 PACKAGES="
-    cffi \
-    aiohttp \
-    frozenlist \
-    multidict \
-    pillow \
-    pycrypto \
-    yarl \
+    cryptography \
     "
 
 PYTHON_VERSION=$(python --version | awk '{ print $2 }' | awk -F '.' '{ print $1 "." $2 }')
