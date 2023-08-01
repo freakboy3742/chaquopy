@@ -977,6 +977,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
 
     @classmethod
     def merge_wheels(cls, package, wheels, python_version, os, api_level):
+        print("merge wheels")
         # Build a single platform compatibility tag
         if package.needs_python:
             compat_tag = (
@@ -986,10 +987,14 @@ class AppleWheelBuilder(BaseWheelBuilder):
             )
         else:
             compat_tag = f"py{python_version[0]}-none-{os.lower()}_{api_level.replace('.', '_')}"
+        print("compat_tag", compat_tag)
 
         merge_dir = f"{package.version_dir}/{compat_tag}"
+        print("merge_dir", merge_dir)
         for sdk, architectures in wheels.items():
+            print("sdk", sdk)
             for arch, wheel in architectures.items():
+                print("arch", arch)
                 # Unpack the source wheel into a shared folder.
                 # This will overwrite every Python file with a copy of itself,
                 # but any files that are different between SDKs will result
@@ -1003,6 +1008,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
             # Generate a fat binary in the "fix wheel" location for each
             # architecture in the sdk.
             SO_PATTERN = r"\.so(\.|$)"
+
             info_dir = f"{package.version_dir}/{compat_tag}_{sdk}_{arch}/fix_wheel/{package.name_version}.dist-info"
             for path, _, _ in csv.reader(open(f"{info_dir}/RECORD")):
                 if bool(re.search(SO_PATTERN, path)):
