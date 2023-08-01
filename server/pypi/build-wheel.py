@@ -502,6 +502,8 @@ class BaseWheelBuilder:
 
         self.platform_update_env(env)
 
+        print(env)
+
         env.update({  # Conda variable names, except those starting with CHAQUOPY.
             "CHAQUOPY_ABI": self.abi.name,
             "CHAQUOPY_TRIPLET": self.abi.tool_prefix,
@@ -736,6 +738,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             env[var.upper()] = filename
         env["LDSHARED"] = f"{env['CC']} -dynamiclib -undefined dynamic_lookup"
         env["SHLIB_SUFFIX"] = ".dylib"
+        print(env)
 
         # If any flags are changed, consider also updating target/build-common-tools.sh.
         gcc_flags = " ".join([
@@ -800,11 +803,11 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             env["LDFLAGS"] = f" -lpython{self.python}"
 
     def process_native_binaries(self, tmp_dir, info_dir):
-        shlib_ext = os.getenv("SHLIB_ENV")
-        if not shlib_ext:
-            shlib_ext = ".so"
-        print("shlib_ext", shlib_ext)
-        SO_PATTERN = fr"\{shlib_ext}(\.|$)"
+        shlib_suffix = os.getenv("SHLIB_SUFFIX")
+        if not shlib_suffix:
+            shlib_suffix = ".so"
+        print("shlib_suffix", shlib_suffix)
+        SO_PATTERN = fr"\{shlib_suffix}(\.|$)"
         print("SO_PATTERN", SO_PATTERN)
         available_libs = set(self.standard_libs)
         for dir_name in [f"{self.reqs_dir}/opt/lib", tmp_dir]:
@@ -827,7 +830,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             # modules will be tagged with the build platform, e.g.
             # `foo.cpython-36m-x86_64-linux-gnu.so`. Remove these tags.
             original_path = join(tmp_dir, path)
-            fixed_path = re.sub(fr"\.(cpython-[^.]+|abi3)\{shlib_ext}$", shlib_ext, original_path)
+            fixed_path = re.sub(fr"\.(cpython-[^.]+|abi3)\{shlib_suffix}$", shlib_suffix, original_path)
             if fixed_path != original_path:
                 run(f"mv {original_path} {fixed_path}")
 
@@ -982,20 +985,27 @@ class AppleWheelBuilder(BaseWheelBuilder):
         raise CommandError("Couldn't read minimum API level from Apple support package")
 
     @classmethod
-    def merge_wheels(cls, package, wheels, python_version, os, api_level):
+    def merge_wheels(cls, package, wheels, python_version, OS, api_level):
+        print("merge wheels")
         # Build a single platform compatibility tag
         if package.needs_python:
             compat_tag = (
                 f"cp{python_version.replace('.', '')}-"
                 f"cp{python_version.replace('.', '')}-"
-                f"{os.lower()}_{api_level.replace('.', '_')}"
+                f"{OS.lower()}_{api_level.replace('.', '_')}"
             )
         else:
-            compat_tag = f"py{python_version[0]}-none-{os.lower()}_{api_level.replace('.', '_')}"
+            compat_tag = f"py{python_version[0]}-none-{OS.lower()}_{api_level.replace('.', '_')}"
+        print("compat_tag", compat_tag)
 
         merge_dir = f"{package.version_dir}/{compat_tag}"
-        for sdk, architectures in wheels.items():
+        print("merge_dir", merge_dir)
+        binary_stubs = set([])
+        for sdk_index, (sdk, architectures) in enumerate(wheels.items()):
+            print("sdk", sdk)
+            print("sdk_index", sdk_index)
             for arch, wheel in architectures.items():
+                print("arch", arch)
                 # Unpack the source wheel into a shared folder.
                 # This will overwrite every Python file with a copy of itself,
                 # but any files that are different between SDKs will result
@@ -1008,22 +1018,40 @@ class AppleWheelBuilder(BaseWheelBuilder):
             # that we iterated over)
             # Generate a fat binary in the "fix wheel" location for each
             # architecture in the sdk.
-            shlib_ext = os.getenv("SHLIB_ENV")
-            if not shlib_ext:
-                shlib_ext = ".so"
-            SO_PATTERN = fr"\{shlib_ext}(\.|$)"
+            shlib_suffix = os.getenv("SHLIB_SUFFIX")
+            if not shlib_suffix:
+                shlib_suffix = ".so"
+            print("shlib_suffix", shlib_suffix)
+            SO_PATTERN = fr"\{shlib_suffix}(\.|$)"
+            print("SO_PATTERN", SO_PATTERN)
             info_dir = f"{package.version_dir}/{compat_tag}_{sdk}_{arch}/fix_wheel/{package.name_version}.dist-info"
-            for path, _, _ in csv.reader(open(f"{info_dir}/RECORD")):
+            print("info_dir", info_dir)
+            for path_index, (path, _, _) in enumerate(csv.reader(open(f"{info_dir}/RECORD"))):
+                print("path", path)
                 if bool(re.search(SO_PATTERN, path)):
                     fat_binary = f"{merge_dir}/{path}"
+                    binary_stub = re.sub(fr"-{sdk}{SO_PATTERN}", "", path)
+                    binary_stubs += set([binary_stub])
+                    print("fat_binary", fat_binary)
                     source_binaries = " ".join([
                         f"{package.version_dir}/{compat_tag}_{sdk}_{arch}/fix_wheel/{path}"
                         for arch in architectures.keys()
                     ])
+                    print("source_binaries", source_binaries)
                     run(f"lipo -create -o {fat_binary} {source_binaries}")
+                    print(f"lipo -create -o {fat_binary} {source_binaries}")
+        for binary_stub in binary_stubs:
+            framework_command = "xcodebuild -create-xcframework -output {merge_dir}/{binary_stub}.xcframework"
+            for sdk, architectures in wheels.items():
+                framework_command += f"-library {merge_dir}{binary_stub}-{sdk}{SO_PATTERN}"
+            run(framework_command)
+
+            
+            
 
         # Repack a single wheel.
         out_dir = ensure_dir(f"{PYPI_DIR}/dist/{normalize_name_pypi(package.name)}")
+        print("out_dir", out_dir)
         out_filename = package_wheel(package, compat_tag, merge_dir, out_dir)
         log(f"Wrote {out_filename}")
 
@@ -1068,6 +1096,7 @@ def package_wheel(package, compat_tag, in_dir, out_dir):
                             "Download-URL": ""},  #
                         if_exist="keep")
     run(f"wheel pack {in_dir} --dest-dir {out_dir} --build-number {build_num}")
+    print(f"wheel pack {in_dir} --dest-dir {out_dir} --build-number {build_num}")
     return join(out_dir, f"{package.name_version}-{build_num}-{compat_tag}.whl")
 
 
@@ -1258,7 +1287,7 @@ def main():
             package,
             wheels,
             python_version=python_version,
-            os=os,
+            OS=os,
             api_level=api_level,
         )
 
