@@ -495,6 +495,7 @@ class BaseWheelBuilder:
         # Adding reqs_dir to PYTHONPATH allows setup.py to import requirements, for example to
         # call numpy.get_include().
         pythonpath = [f"{PYPI_DIR}/env/lib/python", self.reqs_dir]
+        print("pythonpath", pythonpath)
         if "PYTHONPATH" in os.environ:
             pythonpath.append(os.environ["PYTHONPATH"])
         env["PYTHONPATH"] = os.pathsep.join(pythonpath)
@@ -799,7 +800,12 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             env["LDFLAGS"] = f" -lpython{self.python}"
 
     def process_native_binaries(self, tmp_dir, info_dir):
-        SO_PATTERN = r"\.so(\.|$)"
+        shlib_ext = os.getenv("SHLIB_ENV")
+        if not shlib_ext:
+            shlib_ext = ".so"
+        print("shlib_ext", shlib_ext)
+        SO_PATTERN = fr"\{shlib_ext}(\.|$)"
+        print("SO_PATTERN", SO_PATTERN)
         available_libs = set(self.standard_libs)
         for dir_name in [f"{self.reqs_dir}/opt/lib", tmp_dir]:
             if exists(dir_name):
@@ -821,7 +827,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             # modules will be tagged with the build platform, e.g.
             # `foo.cpython-36m-x86_64-linux-gnu.so`. Remove these tags.
             original_path = join(tmp_dir, path)
-            fixed_path = re.sub(r"\.(cpython-[^.]+|abi3)\.so$", ".so", original_path)
+            fixed_path = re.sub(fr"\.(cpython-[^.]+|abi3)\{shlib_ext}$", shlib_ext, original_path)
             if fixed_path != original_path:
                 run(f"mv {original_path} {fixed_path}")
 
@@ -977,7 +983,6 @@ class AppleWheelBuilder(BaseWheelBuilder):
 
     @classmethod
     def merge_wheels(cls, package, wheels, python_version, os, api_level):
-        print("merge wheels")
         # Build a single platform compatibility tag
         if package.needs_python:
             compat_tag = (
@@ -987,14 +992,10 @@ class AppleWheelBuilder(BaseWheelBuilder):
             )
         else:
             compat_tag = f"py{python_version[0]}-none-{os.lower()}_{api_level.replace('.', '_')}"
-        print("compat_tag", compat_tag)
 
         merge_dir = f"{package.version_dir}/{compat_tag}"
-        print("merge_dir", merge_dir)
         for sdk, architectures in wheels.items():
-            print("sdk", sdk)
             for arch, wheel in architectures.items():
-                print("arch", arch)
                 # Unpack the source wheel into a shared folder.
                 # This will overwrite every Python file with a copy of itself,
                 # but any files that are different between SDKs will result
@@ -1007,8 +1008,10 @@ class AppleWheelBuilder(BaseWheelBuilder):
             # that we iterated over)
             # Generate a fat binary in the "fix wheel" location for each
             # architecture in the sdk.
-            SO_PATTERN = r"\.so(\.|$)"
-
+            shlib_ext = os.getenv("SHLIB_ENV")
+            if not shlib_ext:
+                shlib_ext = ".so"
+            SO_PATTERN = fr"\{shlib_ext}(\.|$)"
             info_dir = f"{package.version_dir}/{compat_tag}_{sdk}_{arch}/fix_wheel/{package.name_version}.dist-info"
             for path, _, _ in csv.reader(open(f"{info_dir}/RECORD")):
                 if bool(re.search(SO_PATTERN, path)):
