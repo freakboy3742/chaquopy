@@ -1009,6 +1009,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
         merge_dir = f"{package.version_dir}/{compat_tag}"
         print("merge_dir", merge_dir)
         framework_commands = {}
+        cleanup_commands = {}
         #binary_stubs = set([])
         for sdk_index, (sdk, architectures) in enumerate(wheels.items()):
             print("sdk", sdk)
@@ -1040,9 +1041,15 @@ class AppleWheelBuilder(BaseWheelBuilder):
                 if bool(re.search(SO_PATTERN, path)):
                     fat_binary = f"{merge_dir}/{path}"
                     binary_stub = re.sub(fr"-{sdk}{SO_PATTERN}", "", path)
+                    print("binary_stub", binary_stub)
                     if binary_stub not in framework_commands:
-                        framework_commands[binary_stub] = f"xcodebuild -create-xcframework -output {merge_dir}/{binary_stub}.xcframework"
+                        framework_path = f"{merge_dir}/{binary_stub}.xcframework"
+                        if exists(framework_path):
+                            run(f"rm -rf {framework_path}")
+                        framework_commands[binary_stub] = f"xcodebuild -create-xcframework -output {framework_path}"
+                        cleanup_commands[binary_stub] = "rm"
                     framework_commands[binary_stub] += f" -library {merge_dir}/{path}"
+                    cleanup_commands[binary_stub] += f" {merge_dir}/{path}"
                    
                     #binary_stubs += set([binary_stub])
                     print("fat_binary", fat_binary)
@@ -1057,8 +1064,11 @@ class AppleWheelBuilder(BaseWheelBuilder):
         #    framework_command = "xcodebuild -create-xcframework -output {merge_dir}/{binary_stub}.xcframework"
         #    for sdk, architectures in wheels.items():
         #        framework_command += f"-library {merge_dir}{binary_stub}-{sdk}{SO_PATTERN}"
+        print("framework_commands", framework_commands)
+        #run(f"rm {merge_dir}/*.xcframework")
         for build_stub, framework_command in framework_commands.items():
             run(framework_command)
+            run(cleanup_commands[build_stub])
 
             
             
