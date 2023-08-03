@@ -939,6 +939,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
             "LDFLAGS",
             "LDSHARED",
             "SHLIB_SUFFIX",
+            "SOABI",
         ]:
             orig_parts = split_quoted(config_locals["build_time_vars"][var])
             clean_parts = []
@@ -1043,9 +1044,12 @@ class AppleWheelBuilder(BaseWheelBuilder):
                     binary_stub = re.sub(fr"-{sdk}{SO_PATTERN}", "", path)
                     print("binary_stub", binary_stub)
                     if binary_stub not in framework_commands:
-                        framework_path = f"{merge_dir}/{binary_stub}.xcframework"
+                        framework_path = f"{merge_dir}/{binary_stub.replace('/','.')}.xcframework"
+                    #    framework_path_old = f"{merge_dir}/{binary_stub}.xcframework"
                         if exists(framework_path):
                             run(f"rm -rf {framework_path}")
+                    #    if exists(framework_path_old):
+                    #        run(f"rm -rf {framework_path_old}")
                         framework_commands[binary_stub] = f"xcodebuild -create-xcframework -output {framework_path}"
                         cleanup_commands[binary_stub] = "rm"
                     framework_commands[binary_stub] += f" -library {merge_dir}/{path}"
@@ -1065,12 +1069,13 @@ class AppleWheelBuilder(BaseWheelBuilder):
         #    for sdk, architectures in wheels.items():
         #        framework_command += f"-library {merge_dir}{binary_stub}-{sdk}{SO_PATTERN}"
         print("framework_commands", framework_commands)
+        SOABI = getenv("SOABI")
+        print("SOABI", SOABI)
         #run(f"rm {merge_dir}/*.xcframework")
-        for build_stub, framework_command in framework_commands.items():
+        for binary_stub, framework_command in framework_commands.items():
             run(framework_command)
-            run(cleanup_commands[build_stub])
-
-            
+            run(cleanup_commands[binary_stub])
+            run(f"""grep -r "import {binary_stub.replace(SOABI,'')}" {merge_dir} --include=\*.py > {merge_dir}/{package.name}.possible_patches.log""") 
             
 
         # Repack a single wheel.
