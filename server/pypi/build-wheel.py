@@ -24,6 +24,7 @@ from textwrap import dedent
 # from elftools.elf.elffile import ELFFile
 import jinja2
 import yaml
+import fileinput
 
 
 PROGRAM_NAME = basename(__file__)
@@ -251,6 +252,7 @@ class BaseWheelBuilder:
 
         ensure_dir(self.package.version_dir)
         cd(self.package.version_dir)
+        print("self.package.version_dir", self.package.version_dir)
         self.build_dir = f"{self.package.version_dir}/{self.compat_tag}"
         self.src_dir = f"{self.build_dir}/src"
 
@@ -1044,12 +1046,12 @@ class AppleWheelBuilder(BaseWheelBuilder):
                     binary_stub = re.sub(fr"-{sdk}{SO_PATTERN}", "", path)
                     print("binary_stub", binary_stub)
                     if binary_stub not in framework_commands:
-                        framework_path = f"{merge_dir}/{binary_stub.replace('/','.')}.xcframework"
-                    #    framework_path_old = f"{merge_dir}/{binary_stub}.xcframework"
+                        framework_path = f"{merge_dir}/{binary_stub}.xcframework"
+                        framework_path_old = f"{merge_dir}/{binary_stub.replace('/','.')}.xcframework"
                         if exists(framework_path):
                             run(f"rm -rf {framework_path}")
-                    #    if exists(framework_path_old):
-                    #        run(f"rm -rf {framework_path_old}")
+                        #if exists(framework_path_old):
+                        #    run(f"rm -rf {framework_path_old}")
                         framework_commands[binary_stub] = f"xcodebuild -create-xcframework -output {framework_path}"
                         cleanup_commands[binary_stub] = "rm"
                     framework_commands[binary_stub] += f" -library {merge_dir}/{path}"
@@ -1069,18 +1071,57 @@ class AppleWheelBuilder(BaseWheelBuilder):
         #    for sdk, architectures in wheels.items():
         #        framework_command += f"-library {merge_dir}{binary_stub}-{sdk}{SO_PATTERN}"
         print("framework_commands", framework_commands)
-        SOABI = getenv("SOABI")
-        print("SOABI", SOABI)
+        soabi = getenv("SOABI")
+        print("SOABI", soabi)
+        for sdk in wheels.keys():
+            soabi = re.sub(fr"-{sdk}","",soabi)
+        soabi = fr".{soabi}"
+        print("soabi", soabi) 
         #run(f"rm {merge_dir}/*.xcframework")
         for binary_stub, framework_command in framework_commands.items():
-            run(framework_command)
-            run(cleanup_commands[binary_stub])
-            run(f"""grep -r "import {binary_stub.replace(SOABI,'')}" {merge_dir} --include=\*.py > {merge_dir}/{package.name}.possible_patches.log""") 
+            print(binary_stub)
+            #run(framework_command)
+            #run(cleanup_commands[binary_stub])
+            grep_process = run(f"""grep -Hnr "import {re.sub(r".*/","",binary_stub.replace(soabi,''))}$\|import {re.sub(r".*/","",binary_stub.replace(soabi,''))} " {merge_dir} --include=\*.py""", check=False, stdout=subprocess.PIPE)# > {PYPI_DIR}/dist/{package.name}.possible_patches.log""", check=False) 
+            print("grep_process", grep_process.stdout)
+            print("\n")
+            hits = grep_process.stdout.decode('utf-8').split("\n")
+            print("hits", hits)
+            print("\n")
+            #TODO: what about from . import binary, not-binary?
+            for hit in hits:
+                if hit:
+                    split_hit = hit.split(":")
+                    print("split_hit", split_hit)
+                    print("\n")
+                    file = split_hit[0].strip()
+                    line_num = split_hit[1].strip()
+                    match = split_hit[2].strip()
+                    patched_line =  re.sub(r"from . import","import", match)
+                    #patched_line = re.match(r".*(import.*)$", match).group(1)
+                    print("file", file)
+                    print("match", match)
+                    print("patched_line", patched_line)
+                    print("\n")
+
+                    run(f"""sed -i  "" "s/{match}/{patched_line}/g" {file}""")
+
+                    #for line in fileinput.input(file, inplace=True):
+                    #    if fileinput.filelineno() == int(line_num):
+                    #        print(patched_line.strip())
+                    #    else:
+                    #        print(line.strip())
+            
             
 
         # Repack a single wheel.
         out_dir = ensure_dir(f"{PYPI_DIR}/dist/{normalize_name_pypi(package.name)}")
         print("out_dir", out_dir)
+        for binary_stub, framework_command in framework_commands.items():
+            print(binary_stub)
+            #run(framework_command)
+            #run(cleanup_commands[binary_stub])
+            #run(f"""grep -r "import {re.sub(r".*/","",binary_stub.replace(soabi,''))}" {merge_dir} --include=\*.py > {PYPI_DIR}/dist/{package.name}.possible_patches.log""", check=False) 
         out_filename = package_wheel(package, compat_tag, merge_dir, out_dir)
         log(f"Wrote {out_filename}")
 
@@ -1164,11 +1205,12 @@ def normalize_version(version):
     return str(pkg_resources.parse_version(str(version)))
 
 
-def run(command, check=True):
+def run(command, check=True , stdout=None):
     log(command)
     try:
-        return subprocess.run(shlex.split(command), check=check)
+        return subprocess.run(shlex.split(command), check=check, stdout=stdout)
     except subprocess.CalledProcessError as e:
+        log(e)
         raise CommandError(f"Command returned exit status {e.returncode}")
 
 

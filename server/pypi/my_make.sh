@@ -57,9 +57,9 @@ PACKAGES="
     pycrypto \
     yarl \
     "
-#PACKAGES="
-#    cryptography \
-#    "
+PACKAGES="
+    pillow \ 
+    "
 
 PYTHON_VERSION=$(python --version | awk '{ print $2 }' | awk -F '.' '{ print $1 "." $2 }')
 
