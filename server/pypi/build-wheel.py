@@ -252,7 +252,6 @@ class BaseWheelBuilder:
 
         ensure_dir(self.package.version_dir)
         cd(self.package.version_dir)
-        print("self.package.version_dir", self.package.version_dir)
         self.build_dir = f"{self.package.version_dir}/{self.compat_tag}"
         self.src_dir = f"{self.build_dir}/src"
 
@@ -274,8 +273,6 @@ class BaseWheelBuilder:
             else:
                 self.extract_requirements()
             self.update_env()
-            shlib_suffix = getenv("SHLIB_SUFFIX")
-            print("shlib_suffix", shlib_suffix)
          
             wheel_filename = self.fix_wheel(self.build_wheel())
             #self.reset_env()
@@ -404,14 +401,11 @@ class BaseWheelBuilder:
                 run(f"patch -p1 -i {patches_dir}/{patch_filename}")
 
     def build_wheel(self):
-        print("Inside build wheel")
         cd(self.src_dir)
         build_script = f"{self.package.recipe_dir}/build.sh"
-        print(build_script)
         if exists(build_script):
             return self.build_with_script(build_script)
         elif self.package.needs_python:
-            print("Building with pip")
             return self.build_with_pip()
         else:
             raise CommandError("Don't know how to build: no build.sh exists, and this is not "
@@ -501,14 +495,11 @@ class BaseWheelBuilder:
         # Adding reqs_dir to PYTHONPATH allows setup.py to import requirements, for example to
         # call numpy.get_include().
         pythonpath = [f"{PYPI_DIR}/env/lib/python", self.reqs_dir]
-        print("pythonpath", pythonpath)
         if "PYTHONPATH" in os.environ:
             pythonpath.append(os.environ["PYTHONPATH"])
         env["PYTHONPATH"] = os.pathsep.join(pythonpath)
 
         self.platform_update_env(env)
-
-        print(env)
 
         env.update({  # Conda variable names, except those starting with CHAQUOPY.
             "CHAQUOPY_ABI": self.abi.name,
@@ -537,10 +528,7 @@ class BaseWheelBuilder:
             key: os.environ.get(key)
             for key in env
         }
-        print("updating the env with", env)
         os.environ.update(env)
-
-       
 
         if self.package.needs_cmake:
             self.generate_cmake_toolchain()
@@ -744,9 +732,6 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             if suffix != "gfortran":  # Only required for SciPy and OpenBLAS.
                 assert_exists(filename)
             env[var.upper()] = filename
-        #env["LDSHARED"] = f"{env['CC']} -dynamiclib -undefined dynamic_lookup"
-        #env["SHLIB_SUFFIX"] = ".dylib"
-        #print("env after SHLIB", env)
 
         # If any flags are changed, consider also updating target/build-common-tools.sh.
         gcc_flags = " ".join([
@@ -811,13 +796,10 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             env["LDFLAGS"] = f" -lpython{self.python}"
 
     def process_native_binaries(self, tmp_dir, info_dir):
-        print("Inside process_native_binaries")
         shlib_suffix = getenv("SHLIB_SUFFIX")
         if not shlib_suffix:
             shlib_suffix = ".so"
-        print("shlib_suffix", shlib_suffix)
         SO_PATTERN = fr"\{shlib_suffix}(\.|$)"
-        print("SO_PATTERN", SO_PATTERN)
         available_libs = set(self.standard_libs)
         for dir_name in [f"{self.reqs_dir}/opt/lib", tmp_dir]:
             if exists(dir_name):
@@ -997,7 +979,6 @@ class AppleWheelBuilder(BaseWheelBuilder):
 
     @classmethod
     def merge_wheels(cls, package, wheels, python_version, OS, api_level):
-        print("merge wheels")
         # Build a single platform compatibility tag
         if package.needs_python:
             compat_tag = (
@@ -1007,18 +988,13 @@ class AppleWheelBuilder(BaseWheelBuilder):
             )
         else:
             compat_tag = f"py{python_version[0]}-none-{OS.lower()}_{api_level.replace('.', '_')}"
-        print("compat_tag", compat_tag)
 
         merge_dir = f"{package.version_dir}/{compat_tag}"
-        print("merge_dir", merge_dir)
         framework_commands = {}
         cleanup_commands = {}
         #binary_stubs = set([])
         for sdk_index, (sdk, architectures) in enumerate(wheels.items()):
-            print("sdk", sdk)
-            print("sdk_index", sdk_index)
             for arch, wheel in architectures.items():
-                print("arch", arch)
                 # Unpack the source wheel into a shared folder.
                 # This will overwrite every Python file with a copy of itself,
                 # but any files that are different between SDKs will result
@@ -1034,17 +1010,12 @@ class AppleWheelBuilder(BaseWheelBuilder):
             shlib_suffix = getenv("SHLIB_SUFFIX")
             if not shlib_suffix:
                 shlib_suffix = ".so"
-            print("shlib_suffix", shlib_suffix)
             SO_PATTERN = fr"\{shlib_suffix}(\.|$)"
-            print("SO_PATTERN", SO_PATTERN)
             info_dir = f"{package.version_dir}/{compat_tag}_{sdk}_{arch}/fix_wheel/{package.name_version}.dist-info"
-            print("info_dir", info_dir)
             for path_index, (path, _, _) in enumerate(csv.reader(open(f"{info_dir}/RECORD"))):
-                print("path", path)
                 if bool(re.search(SO_PATTERN, path)):
                     fat_binary = f"{merge_dir}/{path}"
                     binary_stub = re.sub(fr"-{sdk}{SO_PATTERN}", "", path)
-                    print("binary_stub", binary_stub)
                     if binary_stub not in framework_commands:
                         framework_path = f"{merge_dir}/{binary_stub}.xcframework"
                         framework_path_old = f"{merge_dir}/{binary_stub.replace('/','.')}.xcframework"
@@ -1058,52 +1029,34 @@ class AppleWheelBuilder(BaseWheelBuilder):
                     cleanup_commands[binary_stub] += f" {merge_dir}/{path}"
                    
                     #binary_stubs += set([binary_stub])
-                    print("fat_binary", fat_binary)
                     source_binaries = " ".join([
                         f"{package.version_dir}/{compat_tag}_{sdk}_{arch}/fix_wheel/{path}"
                         for arch in architectures.keys()
                     ])
-                    print("source_binaries", source_binaries)
                     run(f"lipo -create -o {fat_binary} {source_binaries}")
-                    print(f"lipo -create -o {fat_binary} {source_binaries}")
         #for binary_stub in binary_stubs:
         #    framework_command = "xcodebuild -create-xcframework -output {merge_dir}/{binary_stub}.xcframework"
         #    for sdk, architectures in wheels.items():
         #        framework_command += f"-library {merge_dir}{binary_stub}-{sdk}{SO_PATTERN}"
-        print("framework_commands", framework_commands)
         soabi = getenv("SOABI")
-        print("SOABI", soabi)
         for sdk in wheels.keys():
             soabi = re.sub(fr"-{sdk}","",soabi)
         soabi = fr".{soabi}"
-        print("soabi", soabi) 
         #run(f"rm {merge_dir}/*.xcframework")
         for binary_stub, framework_command in framework_commands.items():
-            print(binary_stub)
             #run(framework_command)
             #run(cleanup_commands[binary_stub])
             grep_process = run(f"""grep -Hnr "import {re.sub(r".*/","",binary_stub.replace(soabi,''))}$\|import {re.sub(r".*/","",binary_stub.replace(soabi,''))} " {merge_dir} --include=\*.py""", check=False, stdout=subprocess.PIPE)# > {PYPI_DIR}/dist/{package.name}.possible_patches.log""", check=False) 
-            print("grep_process", grep_process.stdout)
-            print("\n")
             hits = grep_process.stdout.decode('utf-8').split("\n")
-            print("hits", hits)
-            print("\n")
             #TODO: what about from . import binary, not-binary?
             for hit in hits:
                 if hit:
                     split_hit = hit.split(":")
-                    print("split_hit", split_hit)
-                    print("\n")
                     file = split_hit[0].strip()
                     line_num = split_hit[1].strip()
                     match = split_hit[2].strip()
                     patched_line =  re.sub(r"from . import","import", match)
                     #patched_line = re.match(r".*(import.*)$", match).group(1)
-                    print("file", file)
-                    print("match", match)
-                    print("patched_line", patched_line)
-                    print("\n")
-
                     run(f"""sed -i  "" "s/{match}/{patched_line}/g" {file}""")
 
                     #for line in fileinput.input(file, inplace=True):
@@ -1116,9 +1069,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
 
         # Repack a single wheel.
         out_dir = ensure_dir(f"{PYPI_DIR}/dist/{normalize_name_pypi(package.name)}")
-        print("out_dir", out_dir)
         for binary_stub, framework_command in framework_commands.items():
-            print(binary_stub)
             #run(framework_command)
             #run(cleanup_commands[binary_stub])
             #run(f"""grep -r "import {re.sub(r".*/","",binary_stub.replace(soabi,''))}" {merge_dir} --include=\*.py > {PYPI_DIR}/dist/{package.name}.possible_patches.log""", check=False) 
@@ -1332,6 +1283,7 @@ def main():
         )
 
         builder.build()
+        builder.reset_env()
     else:
         api_level = AppleWheelBuilder.api_level(os, toolchain, python_version)
         wheels = {}
@@ -1352,9 +1304,6 @@ def main():
                 wheel = builder.build()
                 if wheel:
                     wheels[sdk][architcture] = wheel
-
-        shlib_suffix = getenv("SHLIB_SUFFIX")
-        print("shlib_suffix from main", shlib_suffix)
 
         # Merge the wheels into a single OS wheel.
         AppleWheelBuilder.merge_wheels(
