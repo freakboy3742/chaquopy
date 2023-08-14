@@ -1015,20 +1015,6 @@ class AppleWheelBuilder(BaseWheelBuilder):
             for path_index, (path, _, _) in enumerate(csv.reader(open(f"{info_dir}/RECORD"))):
                 if bool(re.search(SO_PATTERN, path)):
                     fat_binary = f"{merge_dir}/{path}"
-                    binary_stub = re.sub(fr"-{sdk}{SO_PATTERN}", "", path)
-                    if binary_stub not in framework_commands:
-                        framework_path = f"{merge_dir}/{binary_stub}.xcframework"
-                        framework_path_old = f"{merge_dir}/{binary_stub.replace('/','.')}.xcframework"
-                        if exists(framework_path):
-                            run(f"rm -rf {framework_path}")
-                        #if exists(framework_path_old):
-                        #    run(f"rm -rf {framework_path_old}")
-                        framework_commands[binary_stub] = f"xcodebuild -create-xcframework -output {framework_path}"
-                        cleanup_commands[binary_stub] = "rm"
-                    framework_commands[binary_stub] += f" -library {merge_dir}/{path}"
-                    cleanup_commands[binary_stub] += f" {merge_dir}/{path}"
-                   
-                    #binary_stubs += set([binary_stub])
                     source_binaries = " ".join([
                         f"{package.version_dir}/{compat_tag}_{sdk}_{arch}/fix_wheel/{path}"
                         for arch in architectures.keys()
