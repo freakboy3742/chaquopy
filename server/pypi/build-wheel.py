@@ -24,7 +24,6 @@ from textwrap import dedent
 # from elftools.elf.elffile import ELFFile
 import jinja2
 import yaml
-import fileinput
 
 
 PROGRAM_NAME = basename(__file__)
@@ -273,7 +272,6 @@ class BaseWheelBuilder:
             else:
                 self.extract_requirements()
             self.update_env()
-         
             wheel_filename = self.fix_wheel(self.build_wheel())
             #self.reset_env()
             return wheel_filename
@@ -732,6 +730,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             if suffix != "gfortran":  # Only required for SciPy and OpenBLAS.
                 assert_exists(filename)
             env[var.upper()] = filename
+        env["LDSHARED"] = f"{env['CC']} -shared"
 
         # If any flags are changed, consider also updating target/build-common-tools.sh.
         gcc_flags = " ".join([
@@ -978,22 +977,19 @@ class AppleWheelBuilder(BaseWheelBuilder):
         raise CommandError("Couldn't read minimum API level from Apple support package")
 
     @classmethod
-    def merge_wheels(cls, package, wheels, python_version, OS, api_level):
+    def merge_wheels(cls, package, wheels, python_version, os, api_level):
         # Build a single platform compatibility tag
         if package.needs_python:
             compat_tag = (
                 f"cp{python_version.replace('.', '')}-"
                 f"cp{python_version.replace('.', '')}-"
-                f"{OS.lower()}_{api_level.replace('.', '_')}"
+                f"{os.lower()}_{api_level.replace('.', '_')}"
             )
         else:
-            compat_tag = f"py{python_version[0]}-none-{OS.lower()}_{api_level.replace('.', '_')}"
+            compat_tag = f"py{python_version[0]}-none-{os.lower()}_{api_level.replace('.', '_')}"
 
         merge_dir = f"{package.version_dir}/{compat_tag}"
-        framework_commands = {}
-        cleanup_commands = {}
-        #binary_stubs = set([])
-        for sdk_index, (sdk, architectures) in enumerate(wheels.items()):
+        for sdk, architectures in wheels.items():
             for arch, wheel in architectures.items():
                 # Unpack the source wheel into a shared folder.
                 # This will overwrite every Python file with a copy of itself,
@@ -1020,14 +1016,6 @@ class AppleWheelBuilder(BaseWheelBuilder):
                         for arch in architectures.keys()
                     ])
                     run(f"lipo -create -o {fat_binary} {source_binaries}")
-        soabi = getenv("SOABI")
-        for sdk in wheels.keys():
-            soabi = re.sub(fr"-{sdk}","",soabi)
-        soabi = fr".{soabi}"
-        #run(f"rm {merge_dir}/*.xcframework")
-        for binary_stub, framework_command in framework_commands.items():
-            run(framework_command)
-            run(cleanup_commands[binary_stub])
 
         # Repack a single wheel.
         out_dir = ensure_dir(f"{PYPI_DIR}/dist/{normalize_name_pypi(package.name)}")
@@ -1075,7 +1063,6 @@ def package_wheel(package, compat_tag, in_dir, out_dir):
                             "Download-URL": ""},  #
                         if_exist="keep")
     run(f"wheel pack {in_dir} --dest-dir {out_dir} --build-number {build_num}")
-    print(f"wheel pack {in_dir} --dest-dir {out_dir} --build-number {build_num}")
     return join(out_dir, f"{package.name_version}-{build_num}-{compat_tag}.whl")
 
 
@@ -1114,12 +1101,11 @@ def normalize_version(version):
     return str(pkg_resources.parse_version(str(version)))
 
 
-def run(command, check=True , stdout=None):
+def run(command, check=True):
     log(command)
     try:
-        return subprocess.run(shlex.split(command), check=check, stdout=stdout)
+        return subprocess.run(shlex.split(command), check=check)
     except subprocess.CalledProcessError as e:
-        log(e)
         raise CommandError(f"Command returned exit status {e.returncode}")
 
 

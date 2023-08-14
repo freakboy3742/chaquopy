@@ -11,55 +11,46 @@ YEAR="2019"
 
 # packages to build
 
-#PACKAGES="
-#    cffi \
-#    numpy \
-#    aiohttp \
-#    backports-zoneinfo \
-#    bitarray \
-#    brotli \
-#    cymem \
-#    cytoolz \
-#    editdistance \
-#    ephem \
-#    frozenlist \
-#    greenlet \
-#    kiwisolver \
-#    lru-dict \
-#    matplotlib \
-#    multidict \
-#    murmurhash \
-#    netifaces \
-#    pandas \
-#    pillow \
-#    preshed \
-#    pycrypto \
-#    pycurl \
-#    pynacl \
-#    pysha3 \
-#    pywavelets \
-#    pyzbar \
-#    regex \
-#    ruamel-yaml-clib \
-#    scandir \
-#    spectrum \
-#    srsly \
-#    statsmodels \
-#    twisted \
-#    typed-ast \
-#    ujson \
-#    wordcloud \
-#    yarl \
-#    zstandard \
-#    "
 PACKAGES="
     cffi \
+    numpy \
     aiohttp \
+    backports-zoneinfo \
+    bitarray \
+    brotli \
+    cymem \
+    cytoolz \
+    editdistance \
+    ephem \
     frozenlist \
+    greenlet \
+    kiwisolver \
+    lru-dict \
+    matplotlib \
     multidict \
+    murmurhash \
+    netifaces \
+    pandas \
     pillow \
+    preshed \
     pycrypto \
+    pycurl \
+    pynacl \
+    pysha3 \
+    pywavelets \
+    pyzbar \
+    regex \
+    ruamel-yaml-clib \
+    scandir \
+    spectrum \
+    srsly \
+    statsmodels \
+    twisted \
+    typed-ast \
+    ujson \
+    wordcloud \
     yarl \
+    zstandard \
     "
 
 # parse command line
