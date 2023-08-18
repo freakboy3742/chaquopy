@@ -10,7 +10,6 @@ from glob import glob
 import jsonschema
 import multiprocessing
 import os
-from os import getenv
 from os.path import abspath, basename, dirname, exists, isdir, join
 import pkg_resources
 import re
@@ -795,7 +794,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             env["LDFLAGS"] = f" -lpython{self.python}"
 
     def process_native_binaries(self, tmp_dir, info_dir):
-        shlib_suffix = getenv("SHLIB_SUFFIX")
+        shlib_suffix = os.getenv("SHLIB_SUFFIX")
         if not shlib_suffix:
             shlib_suffix = ".so"
         SO_PATTERN = fr"\{shlib_suffix}(\.|$)"
@@ -1003,7 +1002,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
             # that we iterated over)
             # Generate a fat binary in the "fix wheel" location for each
             # architecture in the sdk.
-            shlib_suffix = getenv("SHLIB_SUFFIX")
+            shlib_suffix = os.getenv("SHLIB_SUFFIX")
             if not shlib_suffix:
                 shlib_suffix = ".so"
             SO_PATTERN = fr"\{shlib_suffix}(\.|$)"
