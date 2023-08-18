@@ -794,9 +794,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             env["LDFLAGS"] = f" -lpython{self.python}"
 
     def process_native_binaries(self, tmp_dir, info_dir):
-        shlib_suffix = os.getenv("SHLIB_SUFFIX")
-        if not shlib_suffix:
-            shlib_suffix = ".so"
+        shlib_suffix = os.getenv("SHLIB_SUFFIX", ".so")
         SO_PATTERN = fr"\{shlib_suffix}(\.|$)"
         available_libs = set(self.standard_libs)
         for dir_name in [f"{self.reqs_dir}/opt/lib", tmp_dir]:
