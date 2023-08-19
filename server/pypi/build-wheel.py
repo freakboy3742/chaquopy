@@ -9,7 +9,7 @@ from email import generator, message, parser
 from glob import glob
 import jsonschema
 import multiprocessing
-import os
+import os as python_os
 from os.path import abspath, basename, dirname, exists, isdir, join
 import pkg_resources
 import re
@@ -309,7 +309,7 @@ class BaseWheelBuilder:
             else:
                 run(f"tar -C {temp_dir} -xf {source_filename}")
 
-            files = os.listdir(temp_dir)
+            files = python_os.listdir(temp_dir)
             if len(files) == 1 and isdir(f"{temp_dir}/{files[0]}"):
                 run(f"mv {temp_dir}/{files[0]} {self.src_dir}")
                 run(f"rm -rf {temp_dir}")
@@ -387,14 +387,14 @@ class BaseWheelBuilder:
         base_patches_dir = f"{self.package.recipe_dir}/patches"
         if exists(base_patches_dir):
             cd(self.src_dir)
-            for patch_filename in os.listdir(base_patches_dir):
-                if not os.path.isdir(f"{base_patches_dir}/{patch_filename}"):
+            for patch_filename in python_os.listdir(base_patches_dir):
+                if not python_os.path.isdir(f"{base_patches_dir}/{patch_filename}"):
                     run(f"patch -p1 -i {base_patches_dir}/{patch_filename}")
 
         patches_dir = f"{base_patches_dir}/{self.os}"
         if exists(patches_dir):
             cd(self.src_dir)
-            for patch_filename in os.listdir(patches_dir):
+            for patch_filename in python_os.listdir(patches_dir):
                 run(f"patch -p1 -i {patches_dir}/{patch_filename}")
 
     def build_wheel(self):
@@ -419,7 +419,7 @@ class BaseWheelBuilder:
             dist_dir = f"{PYPI_DIR}/dist/{normalize_name_pypi(package)}"
             matches = []
             if exists(dist_dir):
-                for filename in os.listdir(dist_dir):
+                for filename in python_os.listdir(dist_dir):
                     match = re.search(fr"^{normalize_name_wheel(package)}-"
                                       fr"{normalize_version(version)}-(?P<build_num>\d+)-"
                                       fr"({self.compat_tag}|"
@@ -436,7 +436,7 @@ class BaseWheelBuilder:
             # Move data files into place (used by torchvision to build against torch).
             data_dir = f"{self.reqs_dir}/{package}-{version}.data/data"
             if exists(data_dir):
-                for name in os.listdir(data_dir):
+                for name in python_os.listdir(data_dir):
                     run(f"mv {data_dir}/{name} {self.reqs_dir}")
 
             # Put headers on the include path (used by gevent to build against greenlet).
@@ -455,7 +455,7 @@ class BaseWheelBuilder:
                            (r"^(lib.*)_chaquopy\.so$", r"\1.so")]  # e.g. libjpeg
         reqs_lib_dir = f"{self.reqs_dir}/opt/lib"
         if exists(reqs_lib_dir):
-            for filename in os.listdir(reqs_lib_dir):
+            for filename in python_os.listdir(reqs_lib_dir):
                 for pattern, repl in SONAME_PATTERNS:
                     link_filename = re.sub(pattern, repl, filename)
                     if link_filename in self.standard_libs:
@@ -466,7 +466,7 @@ class BaseWheelBuilder:
     def build_with_script(self, build_script):
         prefix_dir = f"{self.build_dir}/prefix"
         ensure_empty(prefix_dir)
-        os.environ["PREFIX"] = ensure_dir(f"{prefix_dir}/opt")  # Conda variable name
+        python_os.environ["PREFIX"] = ensure_dir(f"{prefix_dir}/opt")  # Conda variable name
         run(build_script)
         return package_wheel(self.package, self.compat_tag, prefix_dir, self.src_dir)
 
@@ -492,9 +492,9 @@ class BaseWheelBuilder:
         # Adding reqs_dir to PYTHONPATH allows setup.py to import requirements, for example to
         # call numpy.get_include().
         pythonpath = [f"{PYPI_DIR}/env/lib/python", self.reqs_dir]
-        if "PYTHONPATH" in os.environ:
-            pythonpath.append(os.environ["PYTHONPATH"])
-        env["PYTHONPATH"] = os.pathsep.join(pythonpath)
+        if "PYTHONPATH" in python_os.environ:
+            pythonpath.append(python_os.environ["PYTHONPATH"])
+        env["PYTHONPATH"] = python_os.pathsep.join(pythonpath)
 
         self.platform_update_env(env)
 
@@ -522,10 +522,10 @@ class BaseWheelBuilder:
         # about to update. Store a value of None if the key doesn't
         # exist in the base environment.
         self.orig_env = {
-            key: os.environ.get(key)
+            key: python_os.environ.get(key)
             for key in env
         }
-        os.environ.update(env)
+        python_os.environ.update(env)
 
         if self.package.needs_cmake:
             self.generate_cmake_toolchain()
@@ -535,9 +535,9 @@ class BaseWheelBuilder:
         # Reset any value that did exist.
         for k, v in self.orig_env.items():
             if v is None:
-                del os.environ[k]
+                del python_os.environ[k]
             else:
-                os.environ[k] = v
+                python_os.environ[k] = v
 
     # Define the minimum necessary to keep CMake happy. To avoid duplication, we still want to
     # configure as much as possible via update_env.
@@ -714,7 +714,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
         self.standard_libs.append(libpython)
 
     def platform_update_env(self, env):
-        env["PATH"] = os.pathsep.join([
+        env["PATH"] = python_os.pathsep.join([
             f"{PYPI_DIR}/env/bin",
             f"{self.reqs_dir}/opt/bin",  # For "-config" scripts.
             env["PATH"]]
@@ -794,12 +794,12 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             env["LDFLAGS"] = f" -lpython{self.python}"
 
     def process_native_binaries(self, tmp_dir, info_dir):
-        shlib_suffix = os.getenv("SHLIB_SUFFIX", ".so")
+        shlib_suffix = python_os.getenv("SHLIB_SUFFIX", ".so")
         SO_PATTERN = fr"\{shlib_suffix}(\.|$)"
         available_libs = set(self.standard_libs)
         for dir_name in [f"{self.reqs_dir}/opt/lib", tmp_dir]:
             if exists(dir_name):
-                for _, _, filenames in os.walk(dir_name):
+                for _, _, filenames in python_os.walk(dir_name):
                     available_libs.update(name for name in filenames
                                           if re.search(SO_PATTERN, name))
 
@@ -822,7 +822,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
                 run(f"mv {original_path} {fixed_path}")
 
             run(f"chmod +w {fixed_path}")
-            run(f"{os.environ['STRIP']} --strip-unneeded {fixed_path}")
+            run(f"{python_os.environ['STRIP']} --strip-unneeded {fixed_path}")
 
             if is_shared or is_executable:
                 reqs.update(self.check_requirements(fixed_path, available_libs))
@@ -869,7 +869,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
         # Cmake, if required
         if self.package.needs_cmake:
             cmake = f"{self.toolchain}/CMake.app"
-            if not os.path.exists(cmake) or not os.path.isdir(cmake):
+            if not python_os.path.exists(cmake) or not python_os.path.isdir(cmake):
                 raise CommandError(f"Couldn't find CMake.app in {self.toolchain}")
             paths.append(f"{self.toolchain}/CMake.app/Contents/bin"),
 
@@ -882,7 +882,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
             "/Library/Apple/usr/bin",
         ])
 
-        env["PATH"] = os.pathsep.join(paths)
+        env["PATH"] = python_os.pathsep.join(paths)
 
         env["CROSS_COMPILE_PLATFORM"] = f"{self.os}".lower()
         env["CROSS_COMPILE_PLATFORM_TAG"] = f"{self.os}_{self.api_level}_{self.abi.name}"
@@ -896,7 +896,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
         env["CROSS_COMPILE_SDK_ROOT"] = sdk_root
         env["CROSS_COMPILE_TOOLCHAIN_SLICE"] = self.abi.slice
 
-        env["CROSS_COMPILE_SYSCONFIGDATA"] = os.sep.join([
+        env["CROSS_COMPILE_SYSCONFIGDATA"] = python_os.sep.join([
             self.toolchain, self.python_version, f"python-stdlib/_sysconfigdata__{self.os.lower()}_{self.abi.name}.py"
         ])
 
@@ -1000,7 +1000,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
             # that we iterated over)
             # Generate a fat binary in the "fix wheel" location for each
             # architecture in the sdk.
-            shlib_suffix = os.getenv("SHLIB_SUFFIX")
+            shlib_suffix = python_os.getenv("SHLIB_SUFFIX")
             if not shlib_suffix:
                 shlib_suffix = ".so"
             SO_PATTERN = fr"\{shlib_suffix}(\.|$)"
@@ -1021,7 +1021,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
 
 
 def find_license_files(path):
-    return [f"{path}/{name}" for name in os.listdir(path)
+    return [f"{path}/{name}" for name in python_os.listdir(path)
             if re.search(r"^(LICEN[CS]E|COPYING)", name.upper())]
 
 
@@ -1128,9 +1128,9 @@ def assert_exists(filename):
 
 
 def cd(new_dir):
-    if new_dir != os.getcwd():
+    if new_dir != python_os.getcwd():
         log(f"cd {new_dir}")
-        os.chdir(new_dir)
+        python_os.chdir(new_dir)
 
 
 def warn(s):
@@ -1251,7 +1251,7 @@ def main():
             package,
             wheels,
             python_version=python_version,
-            OS=os,
+            os=os,
             api_level=api_level,
         )
         builder.reset_env()

@@ -24,31 +24,35 @@ DEPENDENCIES="
     "
 
 # build dependencies
-
+mkdir -p "${TOOLCHAINS}"
 pushd "${TOOLCHAINS}"
-#
-#if ! [ -d "${PYTHON_APPLE_SUPPORT}" ]; then
-#  git clone -b 3.10 https://github.com/ModelFarmAI/Python-Apple-support.git
-#fi
-#
+
+#### only after accepting the PR (https://github.com/beeware/Python-Apple-support/pull/186) swap next two
+
+# if ! [ -d "${PYTHON_APPLE_SUPPORT}" ]; then
+#   git clone -b "${PYTHON_VERSION}" https://github.com/beeware/Python-Apple-support.git
+# fi
+
+if ! [ -d "${PYTHON_APPLE_SUPPORT}" ]; then
+ git clone -b "${PYTHON_VERSION}" https://github.com/ModelFarmAI/Python-Apple-support.git
+fi
+
+
 pushd "${PYTHON_APPLE_SUPPORT}"
-#make
-#make libFFI-wheels
-#make OpenSSL-wheels
-#make BZip2-wheels
-#make XZ-wheels
+make
+make libFFI-wheels
+make OpenSSL-wheels
+make BZip2-wheels
+make XZ-wheels
 popd
 if ! [ -d "${PYTHON_VERSION}" ]; then
     ln -s  "${PYTHON_APPLE_SUPPORT}/support/iOS" "${PYTHON_VERSION}"
 fi
 popd
-#
-#echo ${DIST_DIR}
-#
-#
-#rm -rf "${DIST_DIR}/bzip2" "${DIST_DIR}/libffi" "${DIST_DIR}/openssl" "${DIST_DIR}/xz" "${LOGS}/deps"
-#mkdir -p "${DIST_DIR}" "${LOGS}/deps"
-#mv -f "${TOOLCHAINS}/${PYTHON_APPLE_SUPPORT}/wheels/dist"/* "${DIST_DIR}"
+
+rm -rf "${DIST_DIR}/bzip2" "${DIST_DIR}/libffi" "${DIST_DIR}/openssl" "${DIST_DIR}/xz" "${LOGS}/deps"
+mkdir -p "${DIST_DIR}" "${LOGS}/deps"
+mv -f "${TOOLCHAINS}/${PYTHON_APPLE_SUPPORT}/wheels/dist"/* "${DIST_DIR}"
 rm -f "${LOGS}/success.log" "${LOGS}/fail.log"
 touch "${LOGS}/success.log" "${LOGS}/fail.log"
 

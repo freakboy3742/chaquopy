@@ -54,18 +54,18 @@ PACKAGES="
     frozenlist \
     multidict \
     pillow \
-    pycrypto \
     yarl \
-    "
-PACKAGES="
-    pillow \ 
+    cryptography \
     "
 
 PYTHON_VERSION=$(python --version | awk '{ print $2 }' | awk -F '.' '{ print $1 "." $2 }')
 
 
 for PACKAGE in ${PACKAGES}; do
+    mkdir -p "${LOGS}/${PYTHON_VERSION}"
+    printf "\n\n*** Building package %s version for Python %s ***\n\n" "${PACKAGE}" "${PYTHON_VERSION}"
     python build-wheel.py --toolchain "${TOOLCHAINS}" --python "${PYTHON_VERSION}" --os iOS "${PACKAGE}"  2>&1 | tee "${LOGS}/${PYTHON_VERSION}/${PACKAGE}.log"
+
 done
 
 echo ""
