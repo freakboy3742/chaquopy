@@ -3,7 +3,7 @@ set -eu
 
 # Configure command based on coincurve's setup.py.
 ./autogen.sh
-./configure --host=$CHAQUOPY_TRIPLET --enable-shared --disable-static \
+./configure --host=$CHAQUOPY_TRIPLET --build=$BUILD_TRIPLET --enable-shared --disable-static \
             --disable-dependency-tracking --with-pic --enable-module-recovery --disable-jni \
             --enable-experimental --enable-module-ecdh --enable-benchmark=no
 make -j $CPU_COUNT
