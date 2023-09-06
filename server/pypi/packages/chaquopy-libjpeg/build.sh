@@ -2,7 +2,7 @@
 set -eu
 
 # SIMD is only available for x86, so disable for consistency between ABIs.
-./configure --host=$CHAQUOPY_TRIPLET --without-turbojpeg --without-simd
+./configure --host=$CHAQUOPY_TRIPLET --build=$BUILD_TRIPLET --without-turbojpeg --without-simd
 make -j $CPU_COUNT
 make install prefix=$PREFIX
 

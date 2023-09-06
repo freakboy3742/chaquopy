@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-# shellcheck source=/dev/null
-. environment.sh
-
 # default values and settings
 
-DIST_DIR="dist"
 YEAR="2019"
 
 # packages to build
@@ -89,7 +85,7 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 # build packages
 
-touch "${LOGS}/success.log" "${LOGS}/fail.log"
+touch "logs/success.log" "logs/fail.log"
 PYTHON_VERSION=$(python --version | awk '{ print $2 }' | awk -F '.' '{ print $1 "." $2 }')
 
 for PACKAGE in ${PACKAGES}; do
@@ -104,27 +100,28 @@ for PACKAGE in ${PACKAGES}; do
 
     for DEPENDENCY in numpy; do
       if grep "${DEPENDENCY}" "packages/${PACKAGE}/meta.yaml" &>/dev/null; then
-        sed -i '' "s/- ${DEPENDENCY}.*/- ${DEPENDENCY} $(ls -1 "${DIST_DIR}/${DEPENDENCY}"/*"${PYTHON_VERSION/./}"* | head -1 | awk -F '-' '{ print $2 }' )/g" "packages/${PACKAGE}/meta.yaml"
+        sed -i '' "s/- ${DEPENDENCY}.*/- ${DEPENDENCY} $(ls -1 "dist/${DEPENDENCY}"/*"${PYTHON_VERSION/./}"* | head -1 | awk -F '-' '{ print $2 }' )/g" "packages/${PACKAGE}/meta.yaml"
       fi
     done
 
+    mkdir -p "logs/${PYTHON_VERSION}"
     printf "\n\n*** Building package %s version %s for Python %s ***\n\n" "${PACKAGE}" "${PACKAGE_VERSION}" "${PYTHON_VERSION}"
-    python build-wheel.py --toolchain "${TOOLCHAINS}" --python "${PYTHON_VERSION}" --os iOS "${PACKAGE}" "${PACKAGE_VERSION}" 2>&1 | tee "${LOGS}/${PYTHON_VERSION}/${PACKAGE}.log"
+    python build-wheel.py --toolchain toolchain --python "${PYTHON_VERSION}" --os iOS "${PACKAGE}" "${PACKAGE_VERSION}" 2>&1 | tee "logs/${PYTHON_VERSION}/${PACKAGE}.log"
 
     # shellcheck disable=SC2010
     if [ "$(ls "dist/${PACKAGE}" | grep "cp${PYTHON_VERSION/./}" | grep -c "${PACKAGE_VERSION}")" -ge "4" ]; then
-      echo "${PACKAGE}-${PACKAGE_VERSION} with Python ${PYTHON_VERSION}" >> "${LOGS}/success.log"
+      echo "${PACKAGE}-${PACKAGE_VERSION} with Python ${PYTHON_VERSION}" >> "logs/success.log"
     else
-      echo "${PACKAGE}=${PACKAGE_VERSION} with Python ${PYTHON_VERSION}" >> "${LOGS}/fail.log"
+      echo "${PACKAGE}=${PACKAGE_VERSION} with Python ${PYTHON_VERSION}" >> "logs/fail.log"
     fi
   done
 done
 
 echo ""
 echo "Packages built successfully:"
-cat "${LOGS}/success.log"
+cat "logs/success.log"
 echo ""
 echo "Packages with errors:"
-cat "${LOGS}/fail.log"
+cat "logs/fail.log"
 echo ""
 echo "Completed successfully."

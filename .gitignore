@@ -385,5 +385,5 @@ __pycache__/
 *.pyc
 hs_err*.log
 venv*/
-server/pypi/support
+server/pypi/toolchain
 server/pypi/logs

@@ -11,4 +11,4 @@ requirements:
     - cffi 1.15.1
     - setuptools-rust 0.11.6
   host:
-    - openssl 1.1.1q
+    - openssl 1.1.1v

@@ -4,4 +4,4 @@ package:
 
 requirements:
   host:
-    - libffi 3.4.2
+    - libffi 3.4.4

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eu
 
-./configure --host=$CHAQUOPY_TRIPLET --prefix=$PREFIX --without-python
+./configure --host=$CHAQUOPY_TRIPLET --build=$BUILD_TRIPLET --prefix=$PREFIX --without-python
 make -j $CPU_COUNT V=1
 make install
 
