@@ -79,9 +79,18 @@ Update any GitHub issues, and notify any affected users who contacted us outside
 
 ### Quickstart
 
-Create and activate a Python virtual environment, and run:
+If you don't already have it, check out the branch of the
+[Python-Apple-support](https://github.com/beeware/Python-Apple-support) repository that
+matches your desired Python version, and in the root of the checkout, run:
 
-    ./setup-deps.sh
+    make Python-iOS wheels
+
+This will compile Python, plus all it's dependencies, for macOS and iOS. This could take
+up to 2 hours, depending on your machine.
+
+Then, create and activate a Python virtual environment, and run:
+
+    ./setup-deps.sh <path to Python-Apple-support>
 
 then go get a very large meal - this will take a while to run. When the script
 finishes, it will tell you the packages that succeeded, and the packages that
@@ -104,53 +113,30 @@ you the packages that succeeded, and the packages that failed.
 
 Having run `setup-deps.sh`, run:
 
-    python build-wheel.py --toolchain support --python <python version> --os iOS <package name>
+    python build-wheel.py --toolchain toolchain --python <python version> --os iOS <package name>
 
 For example:
 
-    python build-wheel.py --toolchain support --python 3.10 --os iOS lru-dict
+    python build-wheel.py --toolchain toolchain --python 3.10 --os iOS lru-dict
 
 would build the lru-dict package for Python 3.10.
-
-If you want to build a package that uses `cmake`, you will also need to obtain
-a macOS install of cmake. Get a 'tar.gz' package, and unpack it; copy the `CMake.app`
-into the same folder that contains the support package folder. If you've done this
-correctly, you should have a folder that looks something like:
-
-  - `toolchain`
-    - `3.10`
-      - `VERSIONS`
-      - `Python.xcframework`
-      - `platform-site`
-      - `python-stdlib`
-    - `CMake.app`
-
-The name and location of the `toolchain` folder doesn't matter; this is the folder
-that will be provided as the `--toolchain` argument to `build-wheel.py`.
 
 When you run `build-wheel.py` on a recipe, it will:
 
 * Build an iOS/tvOS arm64 wheel, or a watchOS arm64_32 wheel
 * Build an iOS/tvOS/watchOS Simulator arm64 wheel
 * Build an iOS/tvOS/watchOS Simulator x86_64 wheel
-* Use `lipo` to merge each `.so` file in the Simulator wheels into a "fat" binary
+* Use `lipo` to merge each `.dylib` file in the Simulator wheels into a "fat" binary
 * Merge the iOS and iOS simulator wheels into a single "fat" wheel.
 
-The fat wheel will contain 2 `.so` files for every binary module - one for
+The fat wheel will contain 2 `.dylib` files for every binary module - one for
 devices, and one for the simulator.
 
 As on macOS, an iOS/tvOS/watchOS binary module is statically linked against all
-dependencies. For example, the Pillow binary modules statically link the
-contents of libjpeg, libpng and libfreetype into the .so files contained in the
-`.whl` file. The wheel will not contain `.so` files for any dependencies, nor
-will you need to install any extra dependencies.
-
-If a wheel has a dependency on a binary library that the Apple Support project
-builds (BZip2, XZ, OpenSSL or libFFI), you should clone the Apple Support repository
-and run `make wheels` in that repository. Once that build completes, copy the
-contents of the `wheels/dist` directory into the `server/pypi/dist` folder in
-this reposistory. You can then reference those wheels as a host dependency for
-your new library/
+dependencies. For example, the Pillow binary modules statically link the contents of
+libjpeg, libpng and libfreetype into the `.dylib` files contained in the `.whl` file.
+The wheel will not contain `.dylib` files for any dependencies, nor will you need to
+install any extra dependencies.
 
 If a wheel has a dependency on any other binary library (like `libpng`), there
 will be a `chaquopy-` prefixed recipe for the library. This recipe will produce

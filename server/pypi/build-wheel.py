@@ -113,7 +113,7 @@ class Package:
         self.recipe_dir = self.find_package(package_name_or_recipe)
         self.meta = self.load_meta(self.recipe_dir, override_version=package_version, override_build=build_number)
         self.name = self.meta["package"]["name"]
-        self.version = self.meta["package"]["version"]
+        self.version = str(self.meta["package"]["version"])
 
         self.version_dir = f"{self.recipe_dir}/build/{self.version}"
 
@@ -218,14 +218,14 @@ class BaseWheelBuilder:
         self.no_reqs = no_reqs
 
         # Properties that should be overwritten by subclasses
-        self.os = "UNKNOWN"
+        self.os_name = "UNKNOWN"
     @property
     def python_version_tag(self):
         return self.python_version.replace('.', '')
 
     @property
     def platform_tag(self):
-        return f"{self.os.lower()}_{self.api_level.replace('.','_')}_{self.abi.name}"
+        return f"{self.os_name.lower()}_{self.api_level.replace('.','_')}_{self.abi.name}"
 
     @property
     def non_python_compat_tag(self):
@@ -391,7 +391,7 @@ class BaseWheelBuilder:
                 if not os.path.isdir(f"{base_patches_dir}/{patch_filename}"):
                     run(f"patch -p1 -i {base_patches_dir}/{patch_filename}")
 
-        patches_dir = f"{base_patches_dir}/{self.os}"
+        patches_dir = f"{base_patches_dir}/{self.os_name}"
         if exists(patches_dir):
             cd(self.src_dir)
             for patch_filename in os.listdir(patches_dir):
@@ -501,17 +501,18 @@ class BaseWheelBuilder:
         env.update({  # Conda variable names, except those starting with CHAQUOPY.
             "CHAQUOPY_ABI": self.abi.name,
             "CHAQUOPY_TRIPLET": self.abi.tool_prefix,
+            "BUILD_TRIPLET": f"{os.uname().machine}-apple-darwin",
             "CPU_COUNT": str(multiprocessing.cpu_count()),
             "PKG_BUILDNUM": str(self.package.meta["build"]["number"]),
             "PKG_NAME": self.package.name,
-            "PKG_VERSION": self.package.version,
+            "PKG_VERSION": str(self.package.version),
             "RECIPE_DIR": self.package.recipe_dir,
             "SRC_DIR": self.src_dir,
         })
 
         for var in self.package.meta["build"]["script_env"]:
             key, value = var.split("=")
-            env[key] = value
+            env[key] = str(value)
 
         if self.verbose:
             # Format variables so they can be pasted into a shell when troubleshooting.
@@ -674,7 +675,7 @@ class BaseWheelBuilder:
 class AndroidWheelBuilder(BaseWheelBuilder):
     def __init__(self, package, **kwargs):
         super().__init__(package, **kwargs)
-        self.os = 'android'
+        self.os_name = 'android'
 
     @classmethod
     def detect_toolchain(cls, toolchain):
@@ -794,7 +795,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             env["LDFLAGS"] = f" -lpython{self.python}"
 
     def process_native_binaries(self, tmp_dir, info_dir):
-        SO_PATTERN = r"\.so(\.|$)"
+        SO_PATTERN = r"\.dylib(\.|$)"
         available_libs = set(self.standard_libs)
         for dir_name in [f"{self.reqs_dir}/opt/lib", tmp_dir]:
             if exists(dir_name):
@@ -816,7 +817,7 @@ class AndroidWheelBuilder(BaseWheelBuilder):
             # modules will be tagged with the build platform, e.g.
             # `foo.cpython-36m-x86_64-linux-gnu.so`. Remove these tags.
             original_path = join(tmp_dir, path)
-            fixed_path = re.sub(r"\.(cpython-[^.]+|abi3)\.so$", ".so", original_path)
+            fixed_path = re.sub(r"\.(cpython-[^.]+|abi3)\.dylib$", ".dylib", original_path)
             if fixed_path != original_path:
                 run(f"mv {original_path} {fixed_path}")
 
@@ -846,16 +847,16 @@ class AndroidWheelBuilder(BaseWheelBuilder):
 
 
 class AppleWheelBuilder(BaseWheelBuilder):
-    def __init__(self, os, package, **kwargs):
+    def __init__(self, os_name, package, **kwargs):
         super().__init__(package, **kwargs)
-        self.os = os
+        self.os_name = os_name
 
     def find_python(self):
         super().find_python()
 
-        self.python_include_dir = f"{self.toolchain}/{self.python_version}/Python.xcframework/{self.abi.slice}/Headers"
+        self.python_include_dir = f"{self.toolchain}/{self.python_version}/{self.os_name}/Python.xcframework/{self.abi.slice}/Headers"
         assert_isdir(self.python_include_dir)
-        self.python_lib = f"{self.toolchain}/{self.python_version}/Python.xcframework/{self.abi.slice}/libpython{self.python_version}.a"
+        self.python_lib = f"{self.toolchain}/{self.python_version}/{self.os_name}/Python.xcframework/{self.abi.slice}/libpython{self.python_version}.a"
         assert_exists(self.python_lib)
 
     def platform_update_env(self, env):
@@ -883,8 +884,8 @@ class AppleWheelBuilder(BaseWheelBuilder):
 
         env["PATH"] = os.pathsep.join(paths)
 
-        env["CROSS_COMPILE_PLATFORM"] = f"{self.os}".lower()
-        env["CROSS_COMPILE_PLATFORM_TAG"] = f"{self.os}_{self.api_level}_{self.abi.name}"
+        env["CROSS_COMPILE_PLATFORM"] = f"{self.os_name}".lower()
+        env["CROSS_COMPILE_PLATFORM_TAG"] = f"{self.os_name}_{self.api_level}_{self.abi.name}"
         env["CROSS_COMPILE_PREFIX"] = f"{self.toolchain}/{self.python_version}/Python.xcframework/{self.abi.slice}"
         env["CROSS_COMPILE_IMPLEMENTATION"] = self.abi.name
 
@@ -896,7 +897,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
         env["CROSS_COMPILE_TOOLCHAIN_SLICE"] = self.abi.slice
 
         env["CROSS_COMPILE_SYSCONFIGDATA"] = os.sep.join([
-            self.toolchain, self.python_version, f"python-stdlib/_sysconfigdata__{self.os.lower()}_{self.abi.name}.py"
+            self.toolchain, self.python_version, self.os_name, f"python-stdlib/_sysconfigdata__{self.os_name.lower()}_{self.abi.name}.py"
         ])
 
         config_globals = {}
@@ -917,6 +918,8 @@ class AppleWheelBuilder(BaseWheelBuilder):
             "CONFIGURE_LDFLAGS",
             "LDFLAGS",
             "LDSHARED",
+            "SHLIB_SUFFIX",
+            "SOABI",
         ]:
             orig_parts = split_quoted(config_locals["build_time_vars"][var])
             clean_parts = []
@@ -962,24 +965,24 @@ class AppleWheelBuilder(BaseWheelBuilder):
         pass
 
     @classmethod
-    def api_level(cls, os, toolchain, python_version):
-        with open(f"{toolchain}/{python_version}//VERSIONS") as f:
+    def api_level(cls, os_name, toolchain, python_version):
+        with open(f"{toolchain}/{python_version}/iOS/VERSIONS") as f:
             for line in f.read().splitlines():
-                if line.startswith(f"Min {os} version: "):
+                if line.startswith(f"Min {os_name} version: "):
                     return line.split(':')[1].strip()
         raise CommandError("Couldn't read minimum API level from Apple support package")
 
     @classmethod
-    def merge_wheels(cls, package, wheels, python_version, os, api_level):
+    def merge_wheels(cls, package, wheels, python_version, os_name, api_level):
         # Build a single platform compatibility tag
         if package.needs_python:
             compat_tag = (
                 f"cp{python_version.replace('.', '')}-"
                 f"cp{python_version.replace('.', '')}-"
-                f"{os.lower()}_{api_level.replace('.', '_')}"
+                f"{os_name.lower()}_{api_level.replace('.', '_')}"
             )
         else:
-            compat_tag = f"py{python_version[0]}-none-{os.lower()}_{api_level.replace('.', '_')}"
+            compat_tag = f"py{python_version[0]}-none-{os_name.lower()}_{api_level.replace('.', '_')}"
 
         merge_dir = f"{package.version_dir}/{compat_tag}"
         for sdk, architectures in wheels.items():
@@ -996,7 +999,7 @@ class AppleWheelBuilder(BaseWheelBuilder):
             # that we iterated over)
             # Generate a fat binary in the "fix wheel" location for each
             # architecture in the sdk.
-            SO_PATTERN = r"\.so(\.|$)"
+            SO_PATTERN = r"\.dylib(\.|$)"
             info_dir = f"{package.version_dir}/{compat_tag}_{sdk}_{arch}/fix_wheel/{package.name_version}.dist-info"
             for path, _, _ in csv.reader(open(f"{info_dir}/RECORD")):
                 if bool(re.search(SO_PATTERN, path)):
@@ -1088,7 +1091,7 @@ def normalize_name_wheel(name):
 
 #  e.g. "2017.01.02" -> "2017.1.2"
 def normalize_version(version):
-    return str(pkg_resources.parse_version(version))
+    return str(pkg_resources.parse_version(str(version)))
 
 
 def run(command, check=True):
@@ -1195,7 +1198,7 @@ def main():
     args = ap.parse_args()
     kwargs = vars(args)
 
-    os = kwargs.pop("os")
+    os_name = kwargs.pop("os")
     package_name_or_recipe = kwargs.pop("package_name_or_recipe")
     toolchain = kwargs.pop("toolchain")
     python_version = kwargs.pop("python")
@@ -1204,7 +1207,7 @@ def main():
 
     package = Package(package_name_or_recipe, package_version, build_number)
 
-    if os == "android":
+    if os_name == "android":
         abi, api_level, standard_libs = AndroidWheelBuilder.detect_toolchain(toolchain)
         builder = AndroidWheelBuilder(
             package,
@@ -1218,14 +1221,14 @@ def main():
 
         builder.build()
     else:
-        api_level = AppleWheelBuilder.api_level(os, toolchain, python_version)
+        api_level = AppleWheelBuilder.api_level(os_name, toolchain, python_version)
         wheels = {}
         # Build a wheel for each supported ABI
-        for sdk, architectures in ABIS[os].items():
+        for sdk, architectures in ABIS[os_name].items():
             wheels[sdk] = {}
             for architcture, abi in architectures.items():
                 builder = AppleWheelBuilder(
-                    os,
+                    os_name,
                     package,
                     toolchain=toolchain,
                     python_version=python_version,
@@ -1243,7 +1246,7 @@ def main():
             package,
             wheels,
             python_version=python_version,
-            os=os,
+            os_name=os_name,
             api_level=api_level,
         )
 

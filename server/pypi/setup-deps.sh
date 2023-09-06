@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-# shellcheck source=/dev/null
-. environment.sh
-
 # default values and settings
-
-PYTHON_APPLE_SUPPORT="Python-Apple-support"
+PYTHON_APPLE_SUPPORT=$(readlink -f $1)
 PYTHON_VERSION=$(python --version | awk '{ print $2 }' | awk -F '.' '{ print $1 "." $2 }')
-
+CMAKE_VERSION="3.27.4"
 # dependencies to build
 
 DEPENDENCIES="
@@ -24,45 +20,47 @@ DEPENDENCIES="
     "
 
 # build dependencies
-
-pushd "${TOOLCHAINS}"
-
 if ! [ -d "${PYTHON_APPLE_SUPPORT}" ]; then
-  git clone -b "${PYTHON_VERSION}" https://github.com/beeware/Python-Apple-support.git
+  echo "Couldn't find Python Apple Support folder at '${PYTHON_APPLE_SUPPORT}'"
+  exit
 fi
 
-pushd "${PYTHON_APPLE_SUPPORT}"
-make
-make libFFI-wheels
-make OpenSSL-wheels
-make BZip2-wheels
-make XZ-wheels
-popd
-popd
+rm -rf dist/bzip2 dist/libffi dist/openssl dist/xz logs/deps toolchain/${PYTHON_VERSION}
+mkdir -p dist logs/deps toolchain
 
-rm -rf "${DIST_DIR}/bzip2" "${DIST_DIR}/libffi" "${DIST_DIR}/openssl" "${DIST_DIR}/xz" "${LOGS}/deps"
-mkdir -p "${DIST_DIR}" "${LOGS}/deps"
-mv -f "${TOOLCHAINS}/${PYTHON_APPLE_SUPPORT}/wheels/dist"/* "${DIST_DIR}"
-rm -f "${LOGS}/success.log" "${LOGS}/fail.log"
-touch "${LOGS}/success.log" "${LOGS}/fail.log"
+ln -si ${PYTHON_APPLE_SUPPORT}/wheels/dist/bzip2 dist/bzip2
+ln -si ${PYTHON_APPLE_SUPPORT}/wheels/dist/libffi dist/libffi
+ln -si ${PYTHON_APPLE_SUPPORT}/wheels/dist/openssl dist/openssl
+ln -si ${PYTHON_APPLE_SUPPORT}/wheels/dist/xz dist/xz
+
+ln -si ${PYTHON_APPLE_SUPPORT}/support/${PYTHON_VERSION} toolchain/${PYTHON_VERSION}
+
+if ! [ -d "toolchain/CMake.app" ]; then
+  curl --location "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-macos-universal.tar.gz" --output cmake.tar.gz
+  tar -xzf cmake.tar.gz
+  mv cmake-${CMAKE_VERSION}-macos-universal/CMake.app toolchain
+  rm -rf cmake-${CMAKE_VERSION}-macos-universal cmake.tar.gz
+fi
+
+rm -f "logs/success.log" "logs/fail.log"
+touch "logs/success.log" "logs/fail.log"
 
 for DEPENDENCY in ${DEPENDENCIES}; do
   printf "\n\n*** Building dependency %s ***\n\n" "${DEPENDENCY}"
-  python build-wheel.py --toolchain "${TOOLCHAINS}" --python "${PYTHON_VERSION}" --os iOS "${DEPENDENCY}" 2>&1 | tee "${LOGS}/deps/${DEPENDENCY}.log"
+  python build-wheel.py --toolchain toolchain --python "${PYTHON_VERSION}" --os iOS "${DEPENDENCY}" 2>&1 | tee "logs/deps/${DEPENDENCY}.log"
 
-  # shellcheck disable=SC2010
   if [ "$(ls "dist/${DEPENDENCY}" | grep -c py3)" -ge "2" ]; then
-    echo "${DEPENDENCY}" >> "${LOGS}/success.log"
+    echo "${DEPENDENCY}" >> "logs/success.log"
   else
-    echo "${DEPENDENCY}" >> "${LOGS}/fail.log"
+    echo "${DEPENDENCY}" >> "logs/fail.log"
   fi
 done
 
 echo ""
 echo "Packages built successfully:"
-cat "${LOGS}/success.log"
+cat "logs/success.log"
 echo ""
 echo "Packages with errors:"
-cat "${LOGS}/fail.log"
+cat "logs/fail.log"
 echo ""
 echo "Completed successfully."
